@@ -88,7 +88,7 @@ Catatan:
 
 ### Penyelesaian :
 a. Anthony.c
-   Code lengkap:
+-Code lengkap:
 ```c
 #include <stdio.h>
 #include <stdlib.h>
