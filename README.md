@@ -1,4 +1,4 @@
-# Organize and Analyze Anthony's Favorite Films
+## Task 2 - Organize and Analyze Anthony's Favorite Films
 
 Anthony sedang asyik menonton film favoritnya dari Netflix, namun seiring berjalannya waktu, koleksi filmnya semakin menumpuk. Ia pun memutuskan untuk membuat sistem agar film-film favoritnya bisa lebih terorganisir dan mudah diakses. Anthony ingin melakukan beberapa hal dengan lebih efisien dan serba otomatis.
 
