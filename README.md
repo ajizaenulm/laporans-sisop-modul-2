@@ -628,4 +628,80 @@ int download_file() {
     return 0;
 }
 ```
-Fungsi `download_file` ini digunakan untuk 
+Fungsi `download_file` ini digunakan untuk mendownload file ZIP dari link URL dan menyimpannya ke laptop.
+`CURL *curl` digunakan untuk handle koneksi internet (CURL), `FILE *fp` untuk handle file output (ZIP), `CURLcode res`  untuk menyimpan hasil dari proses download. Kemudian ada `curl = curl_easy_init();` digunakan sebagai inisialisasi CURL.
+```c
+if (!curl) {
+        fprintf(stderr, "Failed to initialize curl\n");
+        return -1;
+    }
+```
+Jika CURL gagal diinisialisasi, maka akan keluar dari fungsi dengan error.
+```c
+fp = fopen(ZIP_FILE, "wb");
+```
+Bagian ini digunakan untuk membuka file baru di laptop (`netflixData.zip`) untuk ditulis dalam mode biner.
+
+```c
+if (!fp) {
+        fprintf(stderr, "Failed to create file %s\n", ZIP_FILE);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+```
+Jika file tidak bisa dibuat, maka hentikan proses dan bersihkan resource CURL.
+
+```c
+curl_easy_setopt(curl, CURLOPT_URL, ZIP_URL);
+```
+Bagian ini berfungsi untuk memberi tahu CURL, URL mana yang akan di-download.
+
+```c
+curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+```
+Bagian ini untuk set fungsi `write_data` sebagai cara menulis data hasil download ke file.
+
+```c
+curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+```
+Bagian ini berfungsi untuk memberitahu CURL supaya menulis hasil download ke file fp (netflixData.zip).
+
+```c
+ curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+```
+Bagian ini berfungsi Jika URL yang mau diakses itu mengarahkan ke URL lain, CURL akan otomatis mengikutinya.
+
+```c
+printf("Downloading file...\n");
+```
+Pesan `Downloading file...` akan dicetak ke terminal supaya user tahu jika sedang melakukan download file.
+
+```c
+res = curl_easy_perform(curl);
+```
+Bagian ini akan memulai download file sesuai semua setting tadi.
+
+```c
+if (res != CURLE_OK) {
+        fprintf(stderr, "Download failed: %s\n", curl_easy_strerror(res));
+        fclose(fp);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+```
+Jika download file gagal, maka akan menampilkan pesan error dan tutup semua resource.
+
+```c
+fclose(fp);
+```
+Bagian ini digunakan untuk menutup file setelah selesai download supaya isinya benar-benar tersimpan.
+
+```c
+curl_easy_cleanup(curl);
+```
+Bagian ini digunakan untuk membersihkan CURL dari memori.
+```c
+return 0;
+```
+Jika berjalan dengan lancar maka akan mengembalikan angka 0, yang berarti fungsi sukses.
+
