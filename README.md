@@ -705,3 +705,58 @@ return 0;
 ```
 Jika berjalan dengan lancar maka akan mengembalikan angka 0, yang berarti fungsi sukses.
 
+
+
+```c
+void log_message(const char* message) {
+    FILE* log = fopen("log.txt", "a");
+    if (!log) {
+        perror("Failed to open log file");
+        return;
+    }
+
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    fprintf(log, "[%02d:%02d:%02d] %s\n", t->tm_hour, t->tm_min, t->tm_sec, message);
+    fclose(log);
+}
+```
+Fungsi `log_message` ini berfungsi untuk  mencatat pesan ke dalam file log.txt, dengan timestamp (jam-menit-detik).
+- Beriikut ini adalah penjelasan lebih dalam:
+```c
+void log_message(const char* message)
+```
+Parameter dari fungsi `log_message` ini adalah teks yang mau dicatat di file log.
+```c
+FILE* log = fopen("log.txt", "a");
+```
+Bagian ini digunakan untuk membuka file `log.txt` dalam mode append (`"a"` artinya tambah di akhir file, tidak menghapus isinya), jika `log.txt` belum ada, otomatis dibuat.
+
+```c
+if (!log) {
+        perror("Failed to open log file");
+        return;
+    }
+```
+Bagian ini menjelaskan jika file gagal dibuka, akan muncul pesan error dan fungsi akan langsung keluar (return).
+
+```c
+time_t now = time(NULL);
+```
+Ini digunakan untuk mengambil waktu saat ini.
+
+```c
+struct tm *t = localtime(&now);
+```
+Bagian ini akan mengubah waktu (now) menjadi format waktu lokal yang bisa dibaca manusia, misalnya jam 13:45:20.
+
+```c
+fprintf(log, "[%02d:%02d:%02d] %s\n", t->tm_hour, t->tm_min, t->tm_sec, message);
+```
+Bagian ini berfungsi menulis file ke `log.txt` dengan format seperti `[13:45:20] Download berhasil` dan pada simbol `%02d` artinya angka ditulis 2 digit, kalau kurang ditambah 0 di depannya (contoh: 05, 09).
+
+```c
+fclose(log);
+```
+Bagian ini digunakan untuk menutup file setelah selesai menulis supaya tidak terjadi error atau kehilangan data.
+
