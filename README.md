@@ -760,3 +760,143 @@ fclose(log);
 ```
 Bagian ini digunakan untuk menutup file setelah selesai menulis supaya tidak terjadi error atau kehilangan data.
 
+```c
+void PARSE_CSV(char* line, char** fields, int max_fields) {
+    int in_quotes = 0;
+    int field_index = 0;
+    char* start = line;
+
+    for (char* p = line; *p && field_index < max_fields; p++) {
+        if (*p == '"') {
+            in_quotes = !in_quotes; 
+        } else if (*p == ',' && !in_quotes) {
+            *p = '\0';
+            fields[field_index++] = start;
+            start = p + 1;
+        }
+    }
+    
+    if (field_index < max_fields) {
+        fields[field_index++] = start;
+    }
+
+    for (int i = 0; i < field_index; i++) {
+        fields[i][strcspn(fields[i], "\r\n")] = 0;
+    }
+}
+```
+
+Fungsi `PARSE_CSV` digunakan untuk memecah satu baris CSV menjadi beberapa kolom (fields) berdasarkan tanda koma (,), dengan memperhatikan tanda kutip (") jika ada. Berikut ini adalah penjelasan lebih lanjut:
+```c
+void PARSE_CSV(char* line, char** fields, int max_fields)
+```
+`line` adalah 1 baris data CSV, `fields` array untuk menyimpan hasil pecahan kolom, `max_fields` jumlah maksimum kolom yang bisa diproses.
+
+```c
+int in_quotes = 0;
+int field_index = 0;
+char* start = line;
+```
+Veriabel `in_quotes` digunakan untuk mengecek apakah sekarang lagi di dalam tanda kutip atau tidak, variabel `field_index` untuk indeks kolom saat ini (misal kolom ke-0, ke-1, ke-2...), dan variabel `start` untuk pointer ke awal kolom yang sedang dibaca.
+```c
+for (char* p = line; *p && field_index < max_fields; p++)
+```
+Bagian ini loop karakter per karakter di dalam line, akan berhenti kalau sudah habis (*p == '\0') atau sudah maksimal jumlah kolom (field_index < max_fields).
+
+```c
+if (*p == '"') {
+    in_quotes = !in_quotes; 
+}
+```
+Kalau ketemu tanda kutip ("), bolak-balik status `in_quotes`.
+
+```c
+else if (*p == ',' && !in_quotes) {
+    *p = '\0';
+    fields[field_index++] = start;
+    start = p + 1;
+}
+```
+Jika ketemu koma dan lagi di luar tanda kutip:
+- Ubah koma itu menjadi \0 (mengakhiri string kolom).
+- Simpan alamat `start` ke `fields`.
+- Lanjut `start` ke karakter berikutnya (setelah koma).
+
+```c
+if (field_index < max_fields) {
+        fields[field_index++] = start;
+    }
+```
+Setelah selesai loop, simpan sisa data yang terakhir ke `fields`.
+
+```c
+for (int i = 0; i < field_index; i++) {
+    fields[i][strcspn(fields[i], "\r\n")] = 0;
+}
+```
+Bersihkan karakter newline (\n) atau carriage return (\r) di akhir setiap field, jadi setiap kolom benar-benar bersih dari karakter aneh.
+
+```c
+int extract_zip() {
+    struct zip *archive;
+    struct zip_file *file;
+    struct zip_stat stat;
+    char buf[100];
+    int err;
+
+    if (mkdir(DATA_FOLDER, 0777) == -1 && errno != EEXIST) {
+        perror("Failed to create data directory");
+        return -1;
+    }
+
+    if ((archive = zip_open(ZIP_FILE, 0, &err)) == NULL) {
+        zip_error_to_str(buf, sizeof(buf), err, errno);
+        fprintf(stderr, "Error opening zip: %s\n", buf);
+        return -1;
+    }
+
+    int entries = zip_get_num_entries(archive, 0);
+    for (int i = 0; i < entries; i++) {
+        if (zip_stat_index(archive, i, 0, &stat) == -1) {
+            fprintf(stderr, "Failed to stat file at index %d\n", i);
+            continue;
+        }
+
+        char path[256];
+        snprintf(path, sizeof(path), "%s/%s", DATA_FOLDER, stat.name);
+
+        char *dir = strdup(path);
+        char *last_slash = strrchr(dir, '/');
+        if (last_slash) {
+            *last_slash = '\0';
+            mkdir(dir, 0777);
+        }
+        free(dir);
+
+        if ((file = zip_fopen_index(archive, i, 0)) == NULL) {
+            fprintf(stderr, "Failed to open file %s in zip\n", stat.name);
+            continue;
+        }
+
+        FILE *out = fopen(path, "wb");
+        if (!out) {
+            fprintf(stderr, "Failed to create file %s\n", path);
+            zip_fclose(file);
+            continue;
+        }
+
+        int bytes_read;
+        while ((bytes_read = zip_fread(file, buf, sizeof(buf))) > 0) {
+            fwrite(buf, 1, bytes_read, out);
+        }
+
+        fclose(out);
+        zip_fclose(file);
+    }
+
+    zip_close(archive);
+    return 0;
+}
+```
+
+Fungsi ini digunakan untuk mengekstrak file ZIP (`netflixData.zip`) ke dalam folder data/. Jadi, isinya di-buka lalu file-file di dalamnya diekstrak keluar jadi file biasa di sistem.
