@@ -505,3 +505,127 @@ int main() {
 }
 ```
 ### Penjelasan:
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <ctype.h>
+#include <zip.h>
+#include <errno.h>
+#include <curl/curl.h>
+#include <stdbool.h>
+```
+Ada sejumlah library yang digunakan untuk menyelesaikan soal ini yaitu :
+- `#include <stdio.h>` berfungsi untuk input-output standar seperti printf, scanf, fprintf, dll.
+- `#include <stdlib.h>` berfungsi sebagai manajemen memori.
+- `#include <string.h>` berfungsi sebagai library yang memanipulasi string.
+- `#include <pthread.h>` berfungsi untuk menggunakan threading (proses berjalan paralel).
+- `#include <time.h>` library yang digunakan untuk menangani waktu dan tanggal.
+- `#include <unistd.h>` berfungsi sebagai fungsi-fungsi sistem dasar unix/linux seperti `sleep`, `usleep`, `fork`, `exec`.
+- `#include <sys/stat.h>` berfungsi untuk memanipulasi file dan direktori.
+- `#include <ctype.h>` untuk fungsi yang berhubungan dengan karakter.
+- `#include <zip.h>` digunakan untuk mengolah dan mengakses file ZIP.
+- `#include <errno.h>` untuk menangani error (kesalahan) yang terjadi di sistem operasi.
+- `#include <curl/curl.h>` digunakan untuk melakukan HTTP Request (download file, upload data ke server, dll.).
+- `#include <stdbool.h>` digunakan sebagai penggunaan tipe data boolean di C.
+
+```c
+#define ZIP_URL "https://drive.google.com/uc?export=download&id=12GWsZbSH858h2HExP3x4DfWZB1jLdV-J"
+#define ZIP_FILE "netflixData.zip"
+#define DATA_FOLDER "data"
+#define CSV_FILE "data/netflixData.csv"
+#define MAX_LINE_LENGTH 1024
+#define MAX_FIELDS 20
+```
+Kemudian di sini ada beberapa konstanta di mana konstanta `#define ZIP_URL "https://drive.google.com/uc?export=download&id=12GWsZbSH858h2HExP3x4DfWZB1jLdV-J"` itu berfungsi untuk mendownload file ZIP dari URL yang sudah dicantumkan, `#define ZIP_FILE "netflixData.zip"` berfungsi sebagai nama dari file ZIP yang sudah didownload, `#define DATA_FOLDER "data"` pada konstanta ini berfungsi sebagai pemberian nama folder untuk menyimpan file ZIP yang telah diekstrak yaitu netflixData.csv, `#define CSV_FILE "data/netflixData.csv"` ini adalah konstanta untuk menyimpan path dari file netflixData.zip, `#define MAX_LINE_LENGTH 1024` konstanta yang menjadi batasan panjang saat membaca file, `#define MAX_FIELDS 20` pada konstanta ini mirip seperti konstanta sebelumnya, yaitu untuk menentukan batasan jumlah kolom (field) dalam satu baris CSV.
+
+```c
+typedef struct {
+    char country[100];
+    int before_2000;
+    int after_2000;
+} CountryStat;
+```
+Struck CountryStat ini dugunakan untuk menyimpan statistik dari film menggunakan beberapa variabel didalamnya. `char country[100]` digunakan untuk menyimpan nama negara dengan panjang maksimal 100 karakter, `int before_2000` digunakan untuk menyimpan jumlah film yang rilis sebelum tahun 200, dan `int after_2000` digunakan untuk menyimpan jumlah film yang rilis setelah tahun 2000.
+
+
+```c
+size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream);
+int download_file();
+void log_message(const char* message);
+void PARSE_CSV(char* line, char** fields, int max_fields);
+int extract_zip();
+void delete_zip();
+void* organize_by_tittle(void* arg);
+void* organize_by_year(void* arg);
+void tampilkan_menu();
+void* unduh_dan_ekstrak(void* arg);
+void* kelompokkan_film(void* arg);
+void* buat_laporan(void* arg);
+void* generate_report(void* arg);
+void proses_pilihan(int pilihan);
+```
+Ini ada bentuk deklarasi fungsi prototype di dalam program C, bagian ini dugunakan untuk memberitahu compiler bahwa fungsi-fungsi ini ada, sehingga jika nanti kode dijalankan akan menghindari yang namanya kompiler error.
+
+```c
+size_t write_data(void *ptr, size_t size, size_t nmemb, FILE *stream) {
+    return fwrite(ptr, size, nmemb, stream);
+}
+```
+Bagian ini berfungsi untuk menulis data hasil download ke dalam file.
+`curl` di sini digunakan untuk mendownload file (`netflixData.zip`), curl akan nerima data sedikit-sedikit (kayak aliran). Nah, write_data ini dipanggil setiap ada data baru, supaya data itu langsung ditulis ke file lokal.
+Penjelasan bagian fungsi `write_data` sendiri adalah sebagai berikut :
+- `void *ptr` : Pointer ke data yang mau ditulis (data hasil download dari internet).
+-  `size_t size` : Ukuran tiap 1 data (dalam byte).
+-  `size_t nmemb` : Jumlah data yang mau ditulis.
+-  `FILE *stream` : file tujuan tempat data ini mau ditulis (`netflixData.zip`).
+
+```c
+return fwrite(ptr, size, nmemb, stream);
+```
+Kemudian bagian ini juga memiliki penjelasan tersendiri yakni :
+Fungsi `fwrite` digunakan untuk menulis data ke file. Alurnya yaitu mengambil data dari `ptr`, setelah itu banyak byte dari data itu sebesar `size` x `nmemb`, kemudian tulis ke file tujuan (`stream`).
+
+```c
+int download_file() {
+    CURL *curl;
+    FILE *fp;
+    CURLcode res;
+
+    curl = curl_easy_init();
+    if (!curl) {
+        fprintf(stderr, "Failed to initialize curl\n");
+        return -1;
+    }
+
+    fp = fopen(ZIP_FILE, "wb");
+    if (!fp) {
+        fprintf(stderr, "Failed to create file %s\n", ZIP_FILE);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, ZIP_URL);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    printf("Downloading file...\n");
+    res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        fprintf(stderr, "Download failed: %s\n", curl_easy_strerror(res));
+        fclose(fp);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+
+    fclose(fp);
+    curl_easy_cleanup(curl);
+    return 0;
+}
+```
+Fungsi `download_file` ini digunakan untuk 
