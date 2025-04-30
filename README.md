@@ -1370,3 +1370,357 @@ void* kelompokkan_film(void* arg) {
     pthread_exit(NULL);
 }
 ```
+
+Fungsi `kelompokkan_film()` digunakan untuk mengelompokkan data film secara paralel berdasarkan dua kriteria, yakni judul (abjad) dan tahun rilis. Fungsi ini menggunakan multithreading dengan pthread untuk melakukan kedua pengelompokan tersebut secara bersamaan (paralel), sehingga prosesnya bisa lebih cepat.
+Berikut adalah penjelasan lebih lengkapnya:
+
+```c
+void* kelompokkan_film(void* arg)
+```
+Fungsi ini didefinisikan sebagai fungsi thread (`void* return` dan `void* arg` parameter) agar bisa dijalankan secara paralel menggunakan `pthread_create`.
+
+
+```c
+pthread_t t1, t2;
+```
+Mendeklarasikan dua variabel `pthread_t` yaitu `t1` dan `t2`, yang akan menyimpan ID thread yang dibuat.
+
+```c
+pthread_create(&t1, NULL, organize_by_tittle, NULL);
+```
+- Membuat thread pertama yang menjalankan fungsi organize_by_tittle (mengelompokkan film berdasarkan huruf awal judul).
+- Parameter kedua (`NULL`) berarti menggunakan pengaturan default.
+- Parameter terakhir `NULL` menunjukkan tidak ada data khusus yang dikirim ke fungsi tersebut.
+
+```c
+pthread_create(&t2, NULL, organize_by_year, NULL);
+```
+Membuat thread kedua untuk menjalankan fungsi `organize_by_year` (mengelompokkan film berdasarkan tahun rilis).
+
+```c
+pthread_join(t1, NULL);
+pthread_join(t2, NULL);
+```
+Menunggu kedua thread (`t1` dan `t2`) selesai sebelum melanjutkan.
+
+```c
+printf("Film berhasil dikelompokkan berdasarkan abjad dan tahun.\n");
+```
+Pesan ini memberitahu bahwa tandanya pengelompokkan film sudah dilakukan.
+
+```c
+pthread_exit(NULL);
+```
+Menyelesaikan fungsi thread ini. Jika tidak ada `pthread_exit`, maka thread bisa selesai terlalu cepat dan menghentikan program utama.
+
+```c
+void* buat_laporan(void* arg) {
+    pthread_t tid;
+    pthread_create(&tid, NULL, generate_report, NULL);
+    pthread_join(tid, NULL);
+    pthread_exit(NULL);
+}
+```
+Fungsi `buat_laporan` adalah fungsi thread yang bertugas untuk membuat laporan dengan menjalankan thread lain (`generate_report`) secara paralel. Berikut adalah penjelasan lebih lengkapnya:
+```c
+void* buat_laporan(void* arg)
+```
+Ini mendefinisikan fungsi `buat_laporan` sebagai fungsi untuk thread, yang menerima argumen `void* arg`. `void*` digunakan agar fungsi ini kompatibel dengan `pthread_create`.
+
+```c
+pthread_t tid;
+```
+Mendeklarasikan variabel tid bertipe `pthread_t`, yaitu variabel untuk menyimpan ID dari thread baru yang akan dibuat.
+
+```c
+pthread_create(&tid, NULL, generate_report, NULL);
+```
+Membuat thread baru untuk menjalankan fungsi `generate_report`.
+- `&tid`: pointer ke variabel untuk menyimpan ID thread yang dibuat.
+- `NULL`: pakai default thread attributes.
+-   generate_report  : nama fungsi yang akan dijalankan di thread baru.
+-   `NULL`: tidak ada argumen yang dikirim ke `generate_report`.
+
+
+```c
+pthread_join(tid, NULL);
+```
+Bagian ini akan menunggu sampai thread generate_report selesai dijalankan. Tanpa ini, thread `buat_laporan` bisa selesai duluan sebelum `generate_report` selesai.
+
+```c
+pthread_exit(NULL);
+```
+Menandakan bahwa thread `buat_laporan` telah selesai dijalankan dengan normal. `NULL` menunjukkan bahwa tidak ada nilai yang dikembalikan ke thread yang menunggu.
+
+```c
+void* generate_report(void* arg) {
+    FILE* f = fopen(CSV_FILE, "r");
+    if (!f) {
+        perror("Failed to open CSV file");
+        pthread_exit(NULL);
+    }
+
+    CountryStat stats[100] = {0};
+    int stat_count = 0;
+
+    char line[MAX_LINE_LENGTH];
+    if (!fgets(line, sizeof(line), f)) {
+        fclose(f);
+        pthread_exit(NULL);
+    }
+
+    while (fgets(line, sizeof(line), f)) {
+        char* fields[MAX_FIELDS] = {0};
+        PARSE_CSV(line, fields, MAX_FIELDS);
+        
+        if (!fields[0] || !fields[1] || !fields[2] || !fields[3]) continue;
+
+        int year = atoi(fields[3]);
+        bool found = false;
+
+        for (int i = 0; i < stat_count; i++) {
+            if (strcmp(stats[i].country, fields[2]) == 0) {
+                found = true;
+                if (year < 2000) stats[i].before_2000++;
+                else stats[i].after_2000++;
+                break;
+            }
+        }
+
+        if (!found && stat_count < 100) {
+            strncpy(stats[stat_count].country, fields[2], sizeof(stats[0].country) - 1);
+            if (year < 2000) {
+                stats[stat_count].before_2000 = 1;
+                stats[stat_count].after_2000 = 0;
+            } else {
+                stats[stat_count].before_2000 = 0;
+                stats[stat_count].after_2000 = 1;
+            }
+            stat_count++;
+        }
+    }
+    fclose(f);
+
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    char report_name[50];
+    strftime(report_name, sizeof(report_name), "report_%d%m%Y.txt", t);
+
+    FILE* report = fopen(report_name, "w");
+    if (report) {
+        for (int i = 0; i < stat_count; i++) {
+            fprintf(report, "%d. Negara: %s\n", i+1, stats[i].country);
+            fprintf(report, "Film sebelum 2000: %d\n", stats[i].before_2000);
+            fprintf(report, "Film setelah 2000: %d\n\n", stats[i].after_2000);
+        }
+        fclose(report);
+        printf("Report successfully created: %s\n", report_name);
+    } else {
+        perror("Failed to create report");
+    }
+
+    pthread_exit(NULL);
+}
+```
+Fungsi `generate_report()` adalah fungsi yang menganalisis data film dari file CSV dan membuat laporan statistik jumlah film per negara yang dirilis sebelum dan sesudah tahun 2000. Laporan ini kemudian disimpan ke file teks dengan nama berdasarkan tanggal saat ini.
+Berikut adalah penjelasan lebih detail:
+```c
+FILE* f = fopen(CSV_FILE, "r");
+if (!f) {
+    perror("Failed to open CSV file");
+    pthread_exit(NULL);
+}
+```
+Bagian ini akan membuka file CSV tempat data film disimpan. Jika gagal, cetak error dan keluar dari thread.
+
+```c
+CountryStat stats[100] = {0};
+int stat_count = 0;
+```
+- `stats[100]`: array untuk menyimpan statistik maksimal 100 negara.
+- `stat_count`: menghitung berapa negara unik yang sudah masuk ke statistik.
+
+```c
+char line[MAX_LINE_LENGTH];
+if (!fgets(line, sizeof(line), f)) {
+    fclose(f);
+    pthread_exit(NULL);
+}
+```
+Bagian ini digunakan untuk mengambil baris pertama, lalu abaikan.
+
+```c
+while (fgets(line, sizeof(line), f)) {
+    char* fields[MAX_FIELDS] = {0};
+    PARSE_CSV(line, fields, MAX_FIELDS);
+
+    if (!fields[0] || !fields[1] || !fields[2] || !fields[3]) continue;
+```
+- Membaca setiap baris CSV.
+- Pisahkan kolomnya ke `fields[]` menggunakan makro `PARSE_CSV`.
+- Lewati baris jika ada fiels yang kosong (judul, sutradara, negara, tahun).
+
+
+```c
+    int year = atoi(fields[3]);
+    bool found = false;
+
+    for (int i = 0; i < stat_count; i++) {
+        if (strcmp(stats[i].country, fields[2]) == 0) {
+            found = true;
+            if (year < 2000) stats[i].before_2000++;
+            else stats[i].after_2000++;
+            break;
+        }
+    }
+```
+- Ubah kolom tahun (`fields[3]`) ke integer.
+- Periksa apakah negara (`fields[2]`) sudah ada di array statistik.
+- Jika ada, tambahkan hitungannya ke before_2000 atau after_2000.
+
+```c
+    if (!found && stat_count < 100) {
+        strncpy(stats[stat_count].country, fields[2], sizeof(stats[0].country) - 1);
+        if (year < 2000) {
+            stats[stat_count].before_2000 = 1;
+            stats[stat_count].after_2000 = 0;
+        } else {
+            stats[stat_count].before_2000 = 0;
+            stats[stat_count].after_2000 = 1;
+        }
+        stat_count++;
+    }
+}
+fclose(f);
+```
+Jika negara belum ada di array maka tambahkan nama negaranya ke array, inisialisasi hitungan film berdasarkan tahun, tambah total `stat_count`.
+
+```c
+time_t now = time(NULL);
+struct tm *t = localtime(&now);
+char report_name[50];
+strftime(report_name, sizeof(report_name), "report_%d%m%Y.txt", t);
+```
+Ambil waktu saat ini kemudian format nama file laporan menjadi `report_DDMMYYYY.txt`.
+
+```c
+FILE* report = fopen(report_name, "w");
+if (report) {
+    for (int i = 0; i < stat_count; i++) {
+        fprintf(report, "%d. Negara: %s\n", i+1, stats[i].country);
+        fprintf(report, "Film sebelum 2000: %d\n", stats[i].before_2000);
+        fprintf(report, "Film setelah 2000: %d\n\n", stats[i].after_2000);
+    }
+    fclose(report);
+    printf("Report successfully created: %s\n", report_name);
+} else {
+    perror("Failed to create report");
+}
+```
+- Buka file laporan untuk ditulis.
+- Tulis daftar negara, jumlah film sebelum dan sesudah 2000.
+- Cetak pesan sukses jika berhasil dibuat.
+
+```c
+pthread_exit(NULL);
+```
+Ini menandakan bahwa thread `generate_report` sudah selesai dijalankan.
+
+
+```c
+void proses_pilihan(int pilihan) {
+    pthread_t tid;
+
+    switch (pilihan) {
+        case 1:
+            pthread_create(&tid, NULL, unduh_dan_ekstrak, NULL);
+            pthread_join(tid, NULL);
+            break;
+        case 2:
+            pthread_create(&tid, NULL, kelompokkan_film, NULL);
+            pthread_join(tid, NULL);
+            break;
+        case 3:
+            pthread_create(&tid, NULL, buat_laporan, NULL);
+            pthread_join(tid, NULL);
+            break;
+        case 0:
+            curl_global_cleanup();
+            exit(0);
+        default:
+            printf("Pilihan tidak valid.\n");
+    }
+}
+```
+
+Fungsi proses_pilihan berfungsi untuk menangani pilihan menu dari pengguna dan menjalankan proses yang sesuai dengan pilihan tersebut menggunakan thread (pthread).
+Berikut adalah penjelasannya:
+
+```c
+pthread_t tid;
+```
+Mendeklarasikan variabel `tid` yang bertipe `pthread_t`, digunakan untuk menyimpan ID thread yang akan dibuat.
+```c
+case 1:
+    pthread_create(&tid, NULL, unduh_dan_ekstrak, NULL);
+    pthread_join(tid, NULL);
+    break;
+```
+- Jika pengguna memilih `1`, program:
+  - Membuat thread baru untuk menjalankan fungsi `unduh_dan_ekstrak`.
+  - `pthread_join` menunggu hingga thread tersebut selesai.
+
+```c
+case 2:
+    pthread_create(&tid, NULL, kelompokkan_film, NULL);
+    pthread_join(tid, NULL);
+    break;
+```
+- Jika user memilih `2`, maka program menjalankan fungsi `kelompokkan_film` dalam thread.
+
+```c
+case 3:
+    pthread_create(&tid, NULL, buat_laporan, NULL);
+    pthread_join(tid, NULL);
+    break;
+```
+Jika user memilih `3`, program menjalankan fungsi `buat_laporan`.
+
+```c
+case 0:
+    curl_global_cleanup();
+    exit(0);
+```
+Jika user memilih `0`, program membersihkan resource yang digunakan oleh libcurl (`curl_global_cleanup`).
+
+```c
+int main() {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    int pilihan;
+    while (1) {
+        tampilkan_menu();
+        scanf("%d", &pilihan);
+        proses_pilihan(pilihan);
+    }
+
+    curl_global_cleanup();
+    return 0;
+}
+```
+Ini adalah pengendali program yang akan menjalankan fungsi utama program. Berikut adalah penjelasannya:
+
+### Foto Hasil Output :
+![image](https://github.com/user-attachments/assets/0d0abdf6-3897-45a2-bfe6-46f2a7e81020)
+![image](https://github.com/user-attachments/assets/e413761f-bc9a-41f0-8b57-3e338ea6a24c)
+![image](https://github.com/user-attachments/assets/2f09d828-2b93-4e9c-97af-14e980584f50)
+![image](https://github.com/user-attachments/assets/5a373805-9aa7-4317-8609-5c1ae444ab66)
+![image](https://github.com/user-attachments/assets/1df74eb9-28e2-4b4f-8ed5-fce0365f193f)
+![image](https://github.com/user-attachments/assets/a2b5da17-ed19-487f-80e4-642f06fc2be9)
+![image](https://github.com/user-attachments/assets/90bdbed4-5016-44d2-a6da-487322f83be3)
+![image](https://github.com/user-attachments/assets/9b243e9c-e6e9-46d0-b855-dc3dfb474557)
+![image](https://github.com/user-attachments/assets/de099695-a560-415e-af5d-b13ae0d19a16)
+![image](https://github.com/user-attachments/assets/b58a46ed-55fc-4e49-844f-770361ff5613)
+![image](https://github.com/user-attachments/assets/989fddbe-8f57-47c4-af98-b30da7a8a771)
+
+---
