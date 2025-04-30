@@ -900,3 +900,126 @@ int extract_zip() {
 ```
 
 Fungsi ini digunakan untuk mengekstrak file ZIP (`netflixData.zip`) ke dalam folder data/. Jadi, isinya di-buka lalu file-file di dalamnya diekstrak keluar jadi file biasa di sistem.
+Berikut adalah penjelasan per bagiannya:
+```c
+struct zip *archive;
+struct zip_file *file;
+struct zip_stat stat;
+char buf[100];
+int err;
+```
+- `archive`: pointer untuk file ZIP yang dibuka.
+- `file`: pointer untuk file yang ada di dalam ZIP.
+- `stat`: info tentang file di dalam ZIP (nama, ukuran, dll).
+- `buf`: buffer kecil untuk membaca data.
+- `err`: menyimpan kode error jika ada.
+
+```c
+if (mkdir(DATA_FOLDER, 0777) == -1 && errno != EEXIST) {
+        perror("Failed to create data directory");
+        return -1;
+    }
+```
+Bagian ini untuk membuat folder data/ untuk mengekstrak file, jika folder sudah ada maka lanjut saja. Jika gagal buat folder karena alasan lain, langsung gagal (return -1).
+
+```c
+if ((archive = zip_open(ZIP_FILE, 0, &err)) == NULL) {
+        zip_error_to_str(buf, sizeof(buf), err, errno);
+        fprintf(stderr, "Error opening zip: %s\n", buf);
+        return -1;
+    }
+```
+Bagian ini akan membuka file ZIP, jika gagal cetak pesan error dan keluar dari fungsi.
+```c
+int entries = zip_get_num_entries(archive, 0);
+```
+Bagian ini akan menghitung ada berapa jumlah file di dc
+alam ZIP.
+```c
+for (int i = 0; i < entries; i++) {
+```
+Ini akan looping dari file pertama sampai file terakhir di dalam ZIP.
+
+```c
+if (zip_stat_index(archive, i, 0, &stat) == -1) {
+    fprintf(stderr, "Failed to stat file at index %d\n", i);
+    continue;
+}
+```
+Untuk cek informasi file (nama file, ukuran file, dll), Jika gagal cek file ini, skip ke file berikutnya (continue).
+
+```c
+char path[256];
+snprintf(path, sizeof(path), "%s/%s", DATA_FOLDER, stat.name);
+```
+Ini digunakan menyiapkan path untuk menyimpan file, dengan menggabungkan nama folder data/ dengan nama file yang akan diekstrak.
+
+```c
+char *dir = strdup(path);
+char *last_slash = strrchr(dir, '/');
+if (last_slash) {
+    *last_slash = '\0';
+    mkdir(dir, 0777);
+}
+free(dir);
+```
+Bagian ini untuk membuat folder jika diperlukan, Jika file ada di dalam subfolder maka bikin folder dulu sebelum membuat file-nya.
+- `strdup` = duplikat string.
+- `strrchr(dir, '/')` = cari / terakhir (folder terakhir).
+
+```c
+if ((file = zip_fopen_index(archive, i, 0)) == NULL) {
+    fprintf(stderr, "Failed to open file %s in zip\n", stat.name);
+    continue;
+}
+```
+Ini akan membuka file di dalam ZIP untuk dibaca.
+
+```c
+FILE *out = fopen(path, "wb");
+if (!out) {
+    fprintf(stderr, "Failed to create file %s\n", path);
+    zip_fclose(file);
+    continue;
+}
+```
+Bagian ini untuk membuka file output yaitu membuka file hasil di komputer untuk ditulisi (wb = write binary), Jika gagal tutup file dari ZIP dan lanjut ke file berikutnya.
+
+```c
+int bytes_read;
+while ((bytes_read = zip_fread(file, buf, sizeof(buf))) > 0) {
+    fwrite(buf, 1, bytes_read, out);
+}
+```
+
+Bagian ini akan menyalin isi file yaitu membaca isi file dari ZIP (`zip_fread`) sedikit-sedikit (pakai `buf`) lalu tulis ke file hasil (`fwrite`). Ini seperti mengopi file dari ZIP ke file lokal.
+
+```c
+fclose(out);
+zip_fclose(file);
+```
+Setelah selesai menulis satu file, tutup file output dan tutup file dari ZIP.
+
+```c
+zip_close(archive);
+```
+Setelah semua file selesai, tutup file ZIP.
+
+```c
+return 0;
+```
+Menandakan kode sukses dijalankan.
+
+```c
+```
+Fungsi `delete_zip()` digunakan untuk menghapus file ZIP setelah selesai digunakan (misalnya setelah proses ekstraksi selesai), agar file tidak memenuhi penyimpanan. Berikut adalah penjelasannya:
+
+```c
+    if (remove(ZIP_FILE) == -1) {
+```
+Fungsi remove() mencoba menghapus file yang namanya disimpan dalam ZIP_FILE (`"netflixData.zip"`), Jika gagal (return -1), maka masuk ke blok if.
+
+```c
+        perror("Failed to delete zip file");
+```
+Bagian ini yang akan menampilkan pesan error ke terminal, fungsi perror() otomatis menambahkan detail error dari sistem.
