@@ -1011,6 +1011,11 @@ return 0;
 Menandakan kode sukses dijalankan.
 
 ```c
+void delete_zip() {
+    if (remove(ZIP_FILE) == -1) {
+        perror("Failed to delete zip file");
+    }
+}
 ```
 Fungsi `delete_zip()` digunakan untuk menghapus file ZIP setelah selesai digunakan (misalnya setelah proses ekstraksi selesai), agar file tidak memenuhi penyimpanan. Berikut adalah penjelasannya:
 
@@ -1023,3 +1028,345 @@ Fungsi remove() mencoba menghapus file yang namanya disimpan dalam ZIP_FILE (`"n
         perror("Failed to delete zip file");
 ```
 Bagian ini yang akan menampilkan pesan error ke terminal, fungsi perror() otomatis menambahkan detail error dari sistem.
+
+
+```c
+void* organize_by_tittle(void* arg) {
+    FILE* f = fopen(CSV_FILE, "r");
+    if (!f) pthread_exit(NULL);
+
+    mkdir("judul", 0777);
+    char line[1024];
+    fgets(line, sizeof(line), f);
+
+    while (fgets(line, sizeof(line), f)) {
+        char* fields[10];
+        PARSE_CSV(line, fields, 10);
+        char* title = fields[0];
+        char* director = fields[1];
+        char* country = fields[2];
+        char* year_str = fields[3];
+        if (!title || !year_str || !director) continue;
+
+        year_str[strcspn(year_str, "\r\n")] = 0;
+
+        char logmsg[256];
+        snprintf(logmsg, sizeof(logmsg), "Proses mengelompokkan berdasarkan Abjad: sedang mengelompokkan untuk film %s", title);
+        log_message(logmsg);
+
+        char fname[20];
+        char first = title[0];
+        if (isalpha(first)) {
+            snprintf(fname, sizeof(fname), "judul/%c.txt", toupper(first));
+        } else if (isdigit(first)) {
+            snprintf(fname, sizeof(fname), "judul/%c.txt", first);
+        } else {
+            snprintf(fname, sizeof(fname), "judul/#.txt");
+        }
+
+        FILE* out = fopen(fname, "a");
+        if (out) {
+            fprintf(out, "%s - %s - %s\n", title, year_str, director);
+            fclose(out);
+        }
+    }
+    fclose(f);
+    pthread_exit(NULL);
+}
+```
+Fungsi organize_by_tittle bertugas untuk mengelompokkan data film berdasarkan huruf pertama judul film, lalu menyimpannya ke dalam file teks sesuai abjadnya.
+Berikut adalah penjelasannya:
+```c
+void* organize_by_tittle(void* arg)
+```
+Fungsi ini adalah fungsi thread (`void*` untuk argumen dan hasil) agar proses pengelompokan ini bisa berjalan paralel.
+
+```c
+FILE* f = fopen(CSV_FILE, "r");
+if (!f) pthread_exit(NULL);
+```
+Ini untuk membuka file CSV untuk dibaca (`CSV_FILE = "data/netflixData.csv"`) dan jika gagal (misalnya file tidak ada), maka thread keluar.
+
+```c
+mkdir("judul", 0777);
+```
+Membuat folder bernama judul (jika belum ada), di sini adalah tempat menyimpan file txt berdasarkan urutan judul film.
+```c
+char line[1024];
+fgets(line, sizeof(line), f);
+```
+Digunakan untuk membaca satu baris dari CSV untuk melewati header.
+
+```c
+while (fgets(line, sizeof(line), f)) {
+```
+Bagian ini digunakan untuk membaca baris-baris berikutnya (isi data film) satu per satu.
+
+```c
+char* fields[10];
+PARSE_CSV(line, fields, 10);
+```
+Memanggil fungsi `PARSE_CSV` untuk memecah satu baris CSV menjadi array field (judul, sutradara, negara, tahun, dll).
+
+```c
+char* title = fields[0];
+char* director = fields[1];
+char* country = fields[2];
+char* year_str = fields[3];
+```
+Varibel ini digunakan untuk menyimpan field seperti judul, sutradara, negara, dan tahun.
+
+```c
+if (!title || !year_str || !director) continue;
+```
+
+Jika ada field penting yang kosong, baris ini dilewati.
+
+```c
+year_str[strcspn(year_str, "\r\n")] = 0;
+```
+Ini digunakan untuk menghapus karakter \r atau \n dari akhir tahun, supaya tidak ikut ditulis ke file.
+
+```c
+char logmsg[256];
+snprintf(logmsg, sizeof(logmsg), "Proses mengelompokkan berdasarkan Abjad: sedang mengelompokkan untuk film %s", title);
+log_message(logmsg);
+```
+Membuat pesan log untuk mencatat bahwa program sedang mengelompokkan film berdasarkan abjad / judul yang akan disimpan dalam `log.txt`.
+
+```c
+char fname[20];
+char first = title[0];
+if (isalpha(first)) {
+    snprintf(fname, sizeof(fname), "judul/%c.txt", toupper(first));
+} else if (isdigit(first)) {
+    snprintf(fname, sizeof(fname), "judul/%c.txt", first);
+} else {
+    snprintf(fname, sizeof(fname), "judul/#.txt");
+}
+```
+Ini digunakan untuk menentukan nama file txt pada folder judul berdasarkan karakter pertamanya.
+
+```c
+FILE* out = fopen(fname, "a");
+if (out) {
+    fprintf(out, "%s - %s - %s\n", title, year_str, director);
+    fclose(out);
+}
+```
+Membuka file tujuan dengan mode append (a), lalu menuliskan informasi film, yaitu `Judul Film - Tahun Rilis - Sutradara`
+```c
+fclose(f);
+pthread_exit(NULL);
+```
+
+Menutup file CSV dan keluar dari thread setelah selesai.
+
+```c
+void* organize_by_year(void* arg) {
+    FILE* f = fopen(CSV_FILE, "r");
+    if (!f) pthread_exit(NULL);
+
+    mkdir("tahun", 0777);
+    char line[1024];
+    fgets(line, sizeof(line), f);
+
+    while (fgets(line, sizeof(line), f)) {
+        char* fields[10];
+        PARSE_CSV(line, fields, 10);
+        char* title = fields[0];
+        char* director = fields[1];
+        char* country = fields[2];
+        char* year_str = fields[3];        
+        if (!title || !year_str || !director) continue;
+
+        year_str[strcspn(year_str, "\r\n")] = 0;
+
+        char logmsg[256];
+        snprintf(logmsg, sizeof(logmsg), "Proses mengelompokkan berdasarkan Tahun: sedang mengelompokkan untuk film %s", title);
+        log_message(logmsg);
+
+        char fname[64];
+        snprintf(fname, sizeof(fname), "tahun/%s.txt", year_str);
+
+        FILE* out = fopen(fname, "a");
+        if (out) {
+            fprintf(out, "%s - %s - %s\n", title, year_str, director);
+            fclose(out);
+        }
+    }
+    fclose(f);
+    pthread_exit(NULL);
+}
+```
+
+Fungsi organize_by_year bertugas mengelompokkan data film dari file CSV ke dalam file teks berdasarkan tahun rilisnya, lalu menyimpannya ke dalam folder bernama `tahun.txt`.
+
+```c
+void* organize_by_year(void* arg)
+```
+Fungsi ini dibuat untuk dijalankan secara paralel (multithreading). `arg` tidak digunakan, tapi harus tetap ada sesuai format fungsi thread (void* → pointer umum).
+
+```c
+FILE* f = fopen(CSV_FILE, "r");
+if (!f) pthread_exit(NULL);
+```
+Membuka file CSV (`data/netflixData.csv`) dalam mode baca (`r`). Jika file tidak bisa dibuka, thread langsung keluar (`pthread_exit(NULL)`).
+
+```c
+mkdir("tahun", 0777);
+```
+Membuat folder baru bernama tahun untuk menyimpan file berdasarkan tahun, mode `0777` memberi izin penuh untuk semua pengguna.
+
+```c
+char line[1024];
+fgets(line, sizeof(line), f);
+```
+Membaca baris pertama dari file CSV.
+
+```c
+while (fgets(line, sizeof(line), f)) {
+```
+Untuk membaca setiap baris berikutnya (isi data film) hingga habis.
+
+```c
+char* fields[10];
+PARSE_CSV(line, fields, 10);
+```
+Memanggil fungsi `PARSE_CSV` untuk memecah baris menjadi bagian-bagian yang sudah diformat.
+
+```c
+char* title = fields[0];
+char* director = fields[1];
+char* country = fields[2];
+char* year_str = fields[3];
+```
+Untuk menyimpan bagian data yang dibutuhkan ke dalam variabel.
+
+```c
+if (!title || !year_str || !director) continue;
+```
+Jika salah satu field kosong, baris tersebut dilewati.
+
+```c
+year_str[strcspn(year_str, "\r\n")] = 0;
+```
+Menghapus karakter newline (`\n` atau `\r`) di akhir string tahun agar tidak mengacaukan nama file.
+
+```c
+char logmsg[256];
+snprintf(logmsg, sizeof(logmsg), "Proses mengelompokkan berdasarkan Tahun: sedang mengelompokkan untuk film %s", title);
+log_message(logmsg);
+```
+
+Bagian ini digunakan untuk menuliskan log ke file `log.txt` untuk memberi tahu bahwa film sedang diproses.
+
+```c
+char fname[64];
+snprintf(fname, sizeof(fname), "tahun/%s.txt", year_str);
+```
+Nama file ditentukan dari tahun film, misalnya: `tahun/2021.txt`
+
+```c
+FILE* out = fopen(fname, "a");
+if (out) {
+    fprintf(out, "%s - %s - %s\n", title, year_str, director);
+    fclose(out);
+}
+```
+Untuk membuka file tahun dalam mode append (`a`) agar bisa menambahkan data baru tanpa menghapus data sebelumnya dan menulis data film ke dalam file tersebut.
+
+```c
+fclose(f);
+pthread_exit(NULL);
+```
+Menutup file CSV setelah semua baris selesai diproses dan mengakhiri thread.
+
+```c
+void tampilkan_menu() {
+    printf("\n===== FILM ANTHONY =====\n");
+    printf("1. Unduh dan Ekstrak ZIP\n");
+    printf("2. Kelompokkan Film\n");
+    printf("3. Buat Laporan\n");
+    printf("0. Keluar\n");
+    printf("Pilihan: ");
+}
+```
+Fungsi `tampilkan_menu()` digunakan untuk menampilkan menu utama program di terminal agar pengguna bisa memilih apa yang ingin dilakukan (misalnya mengunduh file, mengelompokkan film, dll).
+
+```c
+void* unduh_dan_ekstrak(void* arg) {
+    if (download_file() != 0) {
+        pthread_exit(NULL);
+    }
+
+    printf("Ekstrak isi ZIP...\n");
+    if (extract_zip() == 0) {
+        printf("Berhasil diekstrak ke folder %s.\n", DATA_FOLDER);
+        delete_zip();
+        printf("File ZIP dihapus untuk menghemat ruang.\n");
+    } else {
+        printf("Gagal mengekstrak ZIP.\n");
+    }
+    pthread_exit(NULL);
+}
+```
+
+Fungsi `unduh_dan_ekstrak()` bertugas untuk mengunduh file ZIP, mengekstraknya, lalu menghapus file ZIP-nya setelah selesai. Ini dijalankan sebagai thread agar proses berjalan secara paralel dengan proses lain.
+Berikut ini adalah penjelasan lebih detailnya:
+```c
+void* unduh_dan_ekstrak(void* arg)
+```
+Fungsi ini didefinisikan sebagai fungsi thread (`void*`) dan menerima `arg` meskipun tidak digunakan (standar untuk `pthread_create`).
+
+```c
+if (download_file() != 0) {
+    pthread_exit(NULL);
+}
+```
+Menjalankan fungsi download_file() untuk mengunduh ZIP dari internet. Jika gagal (`!= 0`), maka thread dihentikan langsung dengan `pthread_exit(NULL)`.
+
+```c
+printf("Ekstrak isi ZIP...\n");
+```
+Akan mencetak pesan `Ekstrak isi ZIP...` yang menandakan psroses ekstrak file dimulai.
+
+```c
+if (extract_zip() == 0) {
+```
+Mengekstrak file ZIP yang sudah diunduh menggunakan fungsi `extract_zip()`. Kemudian mengecek apakah proses ekstraksi berhasil (`== 0` artinya sukses).
+
+```c
+printf("Berhasil diekstrak ke folder %s.\n", DATA_FOLDER);
+```
+Jika ekstraksi berhasil, tampilkan pesan sukses ke folder tujuan.
+
+```c
+delete_zip();
+printf("File ZIP dihapus untuk menghemat ruang.\n");
+```
+Setelah berhasil diekstrak, file ZIP akan dihapus dari penyimpanan menggunakan fungsi `delete_zip()`.
+
+```c
+} else {
+    printf("Gagal mengekstrak ZIP.\n");
+}
+```
+Jika ekstraksi gagal, tampilkan pesan `Gagal mengekstrak ZIP.`.
+
+```c
+pthread_exit(NULL);
+```
+Menandakan bahwa thread sudah selesai.
+
+```c
+void* kelompokkan_film(void* arg) {
+    pthread_t t1, t2;
+    pthread_create(&t1, NULL, organize_by_tittle, NULL);
+    pthread_create(&t2, NULL, organize_by_year, NULL);
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    printf("Film berhasil dikelompokkan berdasarkan abjad dan tahun.\n");
+    pthread_exit(NULL);
+}
+```
